@@ -3,9 +3,9 @@ package com.pillartechnology.jsptf.core;
 import static java.lang.String.format;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
-import static org.hamcrest.Matchers.is;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 import java.util.Enumeration;
@@ -34,16 +34,16 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import com.gargoylesoftware.htmlunit.html.HtmlPage;
 
 @RunWith(MockitoJUnitRunner.class)
-public class HttpServletRendererTest {
+public class WebViewRendererTest {
 
 	@Mock
 	private HttpServlet servlet;
 
-	private HttpServletRenderer renderer;
+	private WebViewRenderer renderer;
 
 	@Before
 	public void setUp() throws Exception {
-		renderer = new HttpServletRenderer(servlet);
+		renderer = WebViewRenderer.forServlet(servlet);
 		configureServletToReturnString(StringUtils.EMPTY);
 	}
 
@@ -133,6 +133,37 @@ public class HttpServletRendererTest {
 		renderer.after();
 		
 		verify(servlet).destroy();
+	}
+	
+	@Test
+	public void renderPassesItselfToStrategyWhenSet() throws Exception {
+		WebViewRendererStrategy strategy = mock(WebViewRendererStrategy.class);
+		
+		renderer.setStrategy(strategy);
+		
+		verify(strategy).apply(renderer);
+	}
+	
+	@Test
+	public void setStrategiesAppliesAllStrategiesPassedIn() throws Exception {
+		WebViewRendererStrategy strategy = mock(WebViewRendererStrategy.class);
+		WebViewRendererStrategy strategy2 = mock(WebViewRendererStrategy.class);
+		
+		renderer.setStrategies(strategy, strategy2);
+		
+		verify(strategy).apply(renderer);
+		verify(strategy2).apply(renderer);
+	}
+	
+	@Test
+	public void callingFactoryMethodWithStrategiesAppliesAllStrategies() throws Exception {
+		WebViewRendererStrategy strategy = mock(WebViewRendererStrategy.class);
+		WebViewRendererStrategy strategy2 = mock(WebViewRendererStrategy.class);
+
+		WebViewRenderer strategyRenderer = WebViewRenderer.forServlet(servlet, strategy, strategy2);
+		
+		verify(strategy).apply(strategyRenderer);
+		verify(strategy2).apply(strategyRenderer);
 	}
 
 	private void configureServletToReturnString(final String expectedOutput) throws Exception {

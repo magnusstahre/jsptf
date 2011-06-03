@@ -15,8 +15,9 @@ import com.gargoylesoftware.htmlunit.BrowserVersion;
 import com.gargoylesoftware.htmlunit.MockWebConnection;
 import com.gargoylesoftware.htmlunit.WebClient;
 import com.gargoylesoftware.htmlunit.html.HtmlPage;
+import com.pillartechnology.jsptf.exception.JsptfRuntimeException;
 
-public class HttpServletRenderer extends ExternalResource{
+public class WebViewRenderer extends ExternalResource {
 
 	private final HttpServlet servlet;
 	private final ServletContext servletContext = new MockServletContext();
@@ -25,33 +26,49 @@ public class HttpServletRenderer extends ExternalResource{
 	private final WebClient webClient;
 	private URL url;
 	
+	public static WebViewRenderer forServlet(HttpServlet servlet, WebViewRendererStrategy...strategies) throws Exception {
+		WebViewRenderer renderer = new WebViewRenderer(servlet);
+		renderer.setStrategies(strategies);
+		return renderer;
+	}
 
-	public HttpServletRenderer(HttpServlet servlet) {
+	public static WebViewRenderer forServletClass(Class<HttpServlet> clazz, WebViewRendererStrategy...strategies) throws Exception {
+		return forServlet(clazz.newInstance(), strategies);
+	}
+
+	@SuppressWarnings("unchecked")
+	public static WebViewRenderer forJsp(final String jspName, final String basePackageName, WebViewRendererStrategy...strategies) throws Exception {
+		final String className = basePackageName + jspName.replaceAll("_", "_005f").replaceAll("-", "_002d").replace('.', '_').replace('/', '.');
+		Class<HttpServlet> clazz = (Class<HttpServlet>) Class.forName(className);
+		return forServlet(clazz.newInstance(), strategies);
+	}
+
+	private WebViewRenderer(HttpServlet servlet) {
 		this.servlet = servlet;
-		
+
 		webClient = new WebClient(BrowserVersion.FIREFOX_3_6);
 		webClient.setJavaScriptEnabled(false);
 		webClient.setWebConnection(webConnection);
 	}
-	
+
 	@Override
 	protected void before() throws Throwable {
 		servlet.init(new MockServletConfig(servletContext));
 		url = new URL("http://localhost/anything.jsp");
 	}
-	
+
 	@Override
 	protected void after() {
 		servlet.destroy();
 	}
-	
+
 	public HtmlPage render() {
-        webConnection.setResponse(url, generateContent());
-        try {
+		webConnection.setResponse(url, generateContent());
+		try {
 			return webClient.getPage(url);
 		} catch (Exception e) {
-			throw new RuntimeException(e);
-		} 
+			throw new JsptfRuntimeException(e);
+		}
 	}
 
 	private String generateContent() {
@@ -60,7 +77,7 @@ public class HttpServletRenderer extends ExternalResource{
 			servlet.service(httpRequest, httpResponse);
 			return httpResponse.getContentAsString();
 		} catch (Exception e) {
-			throw new RuntimeException(e);
+			throw new JsptfRuntimeException(e);
 		}
 	}
 
@@ -74,5 +91,15 @@ public class HttpServletRenderer extends ExternalResource{
 
 	public void addRequestParameter(String name, String value) {
 		httpRequest.setParameter(name, value);
+	}
+
+	public void setStrategy(WebViewRendererStrategy strategy) {
+		strategy.apply(this);
+	}
+
+	public void setStrategies(WebViewRendererStrategy... strategies) {
+		for (WebViewRendererStrategy strategy : strategies) {
+			setStrategy(strategy);
+		}
 	}
 }
