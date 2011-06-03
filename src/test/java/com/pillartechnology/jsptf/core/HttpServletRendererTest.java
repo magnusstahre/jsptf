@@ -2,6 +2,9 @@ package com.pillartechnology.jsptf.core;
 
 import static java.lang.String.format;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.is;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.verify;
 
@@ -13,6 +16,7 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
+import org.apache.commons.lang.StringUtils;
 import org.hamcrest.Description;
 import org.hamcrest.Matcher;
 import org.hamcrest.TypeSafeMatcher;
@@ -22,7 +26,12 @@ import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.mockito.invocation.InvocationOnMock;
 import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.stubbing.Answer;
+import org.springframework.mock.web.MockHttpServletResponse;
+
+import com.gargoylesoftware.htmlunit.html.HtmlPage;
 
 @RunWith(MockitoJUnitRunner.class)
 public class HttpServletRendererTest {
@@ -33,8 +42,9 @@ public class HttpServletRendererTest {
 	private HttpServletRenderer renderer;
 
 	@Before
-	public void setUp() {
+	public void setUp() throws Exception {
 		renderer = new HttpServletRenderer(servlet);
+		configureServletToReturnString(StringUtils.EMPTY);
 	}
 
 	@Test
@@ -59,6 +69,7 @@ public class HttpServletRendererTest {
 	
 	@Test
 	public void whenRenderingCallsServiceOnTheServlet() throws Throwable {
+		renderer.before();
 		renderer.render();
 		
 		verify(servlet).service(Mockito.any(HttpServletRequest.class), Mockito.any(HttpServletResponse.class));
@@ -73,6 +84,7 @@ public class HttpServletRendererTest {
 		doNothing().when(servlet).init(captor.capture());
 		
 		renderer.before();
+		renderer.render();
 		
 		assertThat(captor.getValue(), hasContextAttribute(attributeName, attributeValue));
 	}
@@ -85,6 +97,7 @@ public class HttpServletRendererTest {
 		final ArgumentCaptor<HttpServletRequest> captor = ArgumentCaptor.forClass(HttpServletRequest.class);
 		doNothing().when(servlet).service(captor.capture(), Mockito.any(HttpServletResponse.class));
 		
+		renderer.before();
 		renderer.render();
 		
 		assertThat(captor.getValue(), hasRequestAttribute(attributeName, attributeValue));
@@ -98,9 +111,21 @@ public class HttpServletRendererTest {
 		final ArgumentCaptor<HttpServletRequest> captor = ArgumentCaptor.forClass(HttpServletRequest.class);
 		doNothing().when(servlet).service(captor.capture(), Mockito.any(HttpServletResponse.class));
 		
+		renderer.before();
 		renderer.render();
 		
 		assertThat(captor.getValue(), hasRequestParameter(parameterName, parameterValue));
+	}
+	
+	@Test
+	public void generatesHtmlPageFromContentInResponse() throws Throwable {
+		final String expectedOutput = "<html><head/><body>blah</body></html>";
+		configureServletToReturnString(expectedOutput);
+		
+		renderer.before();
+		HtmlPage page = renderer.render();
+		
+		assertThat(StringUtils.deleteWhitespace(page.asXml()), containsString(expectedOutput));
 	}
 	
 	@Test
@@ -110,6 +135,17 @@ public class HttpServletRendererTest {
 		verify(servlet).destroy();
 	}
 
+	private void configureServletToReturnString(final String expectedOutput) throws Exception {
+		doAnswer(new Answer<Object>() {
+			
+			public Object answer(InvocationOnMock invocation) throws Throwable {
+				MockHttpServletResponse response = (MockHttpServletResponse) invocation.getArguments()[1];
+				response.getWriter().append(expectedOutput);
+				return null;
+			}
+		}).when(servlet).service(Mockito.any(HttpServletRequest.class), Mockito.any(HttpServletResponse.class));
+	}
+	
 	private static final Matcher<ServletConfig> hasContextAttribute(final String name, final Object value) {
 		return new TypeSafeMatcher<ServletConfig>() {
 
