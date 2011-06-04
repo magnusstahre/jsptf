@@ -3,7 +3,6 @@ package com.pillartechnology.jsptf.tiles;
 import static org.apache.tiles.servlet.context.ServletUtil.CURRENT_CONTAINER_ATTRIBUTE_NAME;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
-import static org.hamcrest.Matchers.is;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.verify;
 
